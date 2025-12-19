@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>URL Shortener Dashboard</title>
+
+<style>
+:root {
+  --primary:#4f46e5;
+  --bg:#f4f6fb;
+  --card:#ffffff;
+  --text:#1f2937;
+  --muted:#6b7280;
+  --border:#e5e7eb;
+}
+
+* { box-sizing:border-box; }
+
+body {
+  margin:0;
+  font-family: "Segoe UI", Roboto, Arial, sans-serif;
+  background:var(--bg);
+  color:var(--text);
+}
+
+/* Layout */
+.container {
+  max-width: 1000px;
+  margin: 40px auto;
+  padding: 0 20px;
+}
+
+/* Header */
+.header {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:30px;
+}
+
+.header h1 {
+  margin:0;
+  font-size:24px;
+}
+
+.logout {
+  background:#ef4444;
+  color:white;
+  border:none;
+  padding:8px 14px;
+  border-radius:6px;
+  cursor:pointer;
+}
+
+/* Cards */
+.card {
+  background:var(--card);
+  border-radius:12px;
+  padding:24px;
+  box-shadow:0 10px 20px rgba(0,0,0,0.05);
+  margin-bottom:30px;
+}
+
+.card h2 {
+  margin-top:0;
+  font-size:20px;
+}
+
+/* Create link */
+.create-box {
+  display:flex;
+  gap:10px;
+  margin-top:15px;
+}
+
+.create-box input {
+  flex:1;
+  padding:12px;
+  border-radius:8px;
+  border:1px solid var(--border);
+  font-size:14px;
+}
+
+.create-box button {
+  padding:12px 20px;
+  background:var(--primary);
+  color:white;
+  border:none;
+  border-radius:8px;
+  cursor:pointer;
+  font-weight:600;
+}
+
+.create-box button:hover {
+  opacity:0.9;
+}
+
+#result {
+  margin-top:15px;
+  font-size:14px;
+}
+
+/* Table */
+table {
+  width:100%;
+  border-collapse:collapse;
+  margin-top:10px;
+}
+
+th {
+  text-align:left;
+  font-size:13px;
+  color:var(--muted);
+  border-bottom:1px solid var(--border);
+  padding-bottom:10px;
+}
+
+td {
+  padding:12px 0;
+  border-bottom:1px solid var(--border);
+  font-size:14px;
+}
+
+.short-link {
+  color:var(--primary);
+  text-decoration:none;
+}
+
+.copy-btn {
+  margin-left:10px;
+  font-size:12px;
+  padding:4px 8px;
+  border-radius:6px;
+  border:1px solid var(--border);
+  cursor:pointer;
+  background:#f9fafb;
+}
+
+.empty {
+  color:var(--muted);
+  margin-top:15px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <h1>🔗 URL Shortener</h1>
+    <button class="logout" onclick="logout()">Logout</button>
+  </div>
+
+  <!-- Create Link Card -->
+  <div class="card">
+    <h2>Create Short URL</h2>
+    <p style="color:var(--muted);margin-top:5px;">
+      Paste a long URL and generate a short one instantly.
+    </p>
+
+    <div class="create-box">
+      <input id="url" placeholder="https://example.com/very/long/url">
+      <button onclick="create()">Shorten</button>
+    </div>
+
+    <div id="result"></div>
+  </div>
+
+  <!-- Links Table -->
+  <div class="card">
+    <h2>Your Links</h2>
+
+    <table id="table"></table>
+    <div id="empty" class="empty"></div>
+  </div>
+
+</div>
+
+<script>
+const API = "Your API URL";
+const token = localStorage.getItem("token");
+
+if(!token){
+  window.location.href = "index.html";
+}
+
+/* Create link */
+async function create(){
+  const url = document.getElementById("url").value.trim();
+  if(!url) return alert("Please enter a URL");
+
+  const res = await fetch(`${API}/links`,{
+    method:"POST",
+    headers:{
+      "Authorization": token,
+      "Content-Type":"application/json"
+    },
+    body: JSON.stringify({target_url:url})
+  });
+
+  const data = await res.json();
+  const shortUrl = `${API}/${data.code}`;
+
+  document.getElementById("result").innerHTML = `
+    ✅ Short URL:
+    <a class="short-link" href="${shortUrl}" target="_blank">${shortUrl}</a>
+    <button class="copy-btn" onclick="copy('${shortUrl}')">Copy</button>
+  `;
+
+  document.getElementById("url").value="";
+  load();
+}
+
+/* Load user links */
+async function load(){
+  const res = await fetch(`${API}/admin/links`,{
+    headers:{ "Authorization": token }
+  });
+  const data = await res.json();
+
+  if(!data.length){
+    document.getElementById("table").innerHTML="";
+    document.getElementById("empty").innerText="No links created yet.";
+    return;
+  }
+
+  let html = `
+   <tr>
+    <th>Short Link</th>
+    <th>Original URL</th>
+    <th>Clicks</th>
+    </tr>
+  `;
+
+data.forEach(d=>{
+  const short = `${API}/${d.code}`;
+  const longUrl = d.target_url;
+
+  html += `
+    <tr>
+      <td>
+        <a class="short-link" href="${short}" target="_blank">
+          ${short}
+        </a>
+      </td>
+      <td title="${longUrl}">
+        ${longUrl.length > 50 ? longUrl.substring(0,50) + "..." : longUrl}
+      </td>
+      <td>${d.click_count}</td>
+    </tr>
+  `;
+});
+
+
+  document.getElementById("empty").innerText="";
+  document.getElementById("table").innerHTML = html;
+}
+
+/* Copy */
+function copy(text){
+  navigator.clipboard.writeText(text);
+  alert("Copied to clipboard!");
+}
+
+/* Logout */
+function logout(){
+  localStorage.removeItem("token");
+  window.location.href="index.html";
+}
+
+load();
+</script>
+
+</body>
+</html>
